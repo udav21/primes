@@ -1,0 +1,8 @@
+[{<<"eredis">>,
+  {git,"https://github.com/wooga/eredis.git",
+       {ref,"6845ed50e13f456ecd115bcf9de666a58a1529dc"}},
+  0},
+ {<<"eredis_smart_sub">>,
+  {git,"https://github.com/nacmartin/eredis_smart_sub.git",
+       {ref,"5fc668a87abcfee0c7a1978f2a0c839bc99f5066"}},
+  0}].
