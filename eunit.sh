@@ -1,1 +1,4 @@
-erlc -DTEST primes_tests.erl && erl -noshell -pa test -eval "eunit:test(primes_tests.erl, [verbose])" -s init stop
+#!/bin/bash
+cd test
+erlc primes_tests.erl
+erl -noshell -eval "eunit:test(primes_tests, [verbose])" -s init stop
