@@ -57,7 +57,11 @@ test_rg() ->
     BasicArgs = add_redis_pids(get_params()),
     ArgsRG = prepare_record_rg(BasicArgs),
     %ArgsPF = prepare_record_pf(BasicArgs),
-    {ok, _RG} = random_generator:start_link(ArgsRG).
+    case is_process_alive(random_generator) of
+        false -> {ok, RG} = random_generator:start_link(ArgsRG);
+        true  -> RG = whereis(random_generator)
+    end,
+    RG.
 
 test_app_start() ->
     [
@@ -85,14 +89,14 @@ test_app_start() ->
 
 get_params() -> 
     {ok, [Args]} = file:consult(?FCONF),
-    Pars = #args{
-                    rds_host = proplists:get_value('RedisHost'   , Args, "127.0.0.1"),
-                    rds_port = proplists:get_value('RedisPort'   , Args, 6379       ),
-                    rds_db   = proplists:get_value('RedisDB'     , Args, 0          ),
-                    rds_q    = proplists:get_value('QueueKey'    , Args, "randoms"  ),
-                    rds_s    = proplists:get_value('ResultSetKey', Args, "primes"   ),
-	                num		 = proplists:get_value('N'           , Args, 1000000000 )
-               }.
+    #args{
+            rds_host = proplists:get_value('RedisHost'   , Args, "127.0.0.1"),
+            rds_port = proplists:get_value('RedisPort'   , Args, 6379       ),
+            rds_db   = proplists:get_value('RedisDB'     , Args, 0          ),
+            rds_q    = proplists:get_value('QueueKey'    , Args, "randoms"  ),
+            rds_s    = proplists:get_value('ResultSetKey', Args, "primes"   ),
+	        num		 = proplists:get_value('N'           , Args, 1000000000 )
+         }.
 
 add_redis_pids(#args{} = Pars) ->
     application:load(eredis),
@@ -101,18 +105,18 @@ add_redis_pids(#args{} = Pars) ->
                                      Pars#args.rds_db),    
     {ok, EredisSubClient} = eredis_sub:start_link(),
     {ok, SubClient} = eredis_smart_sub:start_link(EredisSubClient),
-    NewPars = Pars#args{rds = Eredis, rds_sub = SubClient}.
+    Pars#args{rds = Eredis, rds_sub = SubClient}.
 
 prepare_record_rg(#args{} = Pars) ->
-    RG = #st_rg{
-                number = Pars#args.num,
-                queue  = list_to_binary(Pars#args.rds_q),
-                redis  = Pars#args.rds
-               }.
+    #st_rg{
+            number = Pars#args.num,
+            queue  = list_to_binary(Pars#args.rds_q),
+            redis  = Pars#args.rds
+          }.
 prepare_record_pf(#args{} = Pars) ->
-    PF = #st_pf{     
-                queue     = list_to_binary(Pars#args.rds_q), 
-                set       = list_to_binary(Pars#args.rds_s),
-                redis     = Pars#args.rds,
-                redis_sub = Pars#args.rds_sub
-               }.
+    #st_pf{     
+            queue     = list_to_binary(Pars#args.rds_q), 
+            set       = list_to_binary(Pars#args.rds_s),
+            redis     = Pars#args.rds,
+            redis_sub = Pars#args.rds_sub
+          }.
