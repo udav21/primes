@@ -57,11 +57,11 @@ test_rg() ->
     BasicArgs = add_redis_pids(get_params()),
     ArgsRG = prepare_record_rg(BasicArgs),
     %ArgsPF = prepare_record_pf(BasicArgs),
-    case is_process_alive(random_generator) of
-        false -> {ok, RG} = random_generator:start_link(ArgsRG);
-        true  -> RG = whereis(random_generator)
+    case random_generator:start_link(ArgsRG) of
+        {ok, RG} -> RG;
+        _  -> whereis(random_generator)
     end,
-    RG.
+    [?_assert(true)].
 
 test_app_start() ->
     [
@@ -69,20 +69,6 @@ test_app_start() ->
         ?_assertEqual(ok, application:stop(primes))
     ].
 
-%test_rg() ->
-%	{"Тест содержимого конфига",
-%		{setup,
-%		fun test_rg_start/0,
-%		fun test_rg_stop/1,
-%		fun (ParamList) ->
-%			[
-%				{
-%					"% все ключи на месте?",
-%					?_assertEqual(ParamList,  proplists:get_keys(file:consult(?CONF)))
-%				}
-%			]
-%		end}
-%    }.
 %%-------------------------------------------------------------------------
 %% Функции подготовки структур данных
 %%-------------------------------------------------------------------------
@@ -120,3 +106,21 @@ prepare_record_pf(#args{} = Pars) ->
             redis     = Pars#args.rds,
             redis_sub = Pars#args.rds_sub
           }.
+
+%% ------------------------------------------------------------------------
+%% Шаблон тестов
+%% ------------------------------------------------------------------------
+%test_some() ->
+%	{"Тест чего-то",
+%		{setup,
+%		fun start/0,
+%		fun stop/1,
+%		fun (Set) ->
+%			[
+%				{
+%					"% test case",
+%					?_assert( , )
+%				}
+%			]
+%		end}
+%    }.
