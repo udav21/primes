@@ -2,109 +2,74 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--include("../src/states.hrl").
+-include("../include/states.hrl").
 
--define(CONF, "../config/primes.config").
+-define(FCONF, "primes.config").
+
 %% ===================================================================
 %%				TESTS
 %% ===================================================================
 all_test_() ->
 	[
-		test_config(), % проверка наличия конфигурации
-		test_config_keys(), % наличие всех параметров
-		test_config_content(), % типы параметров
-		test_app_start()% старт приложения (старт, старт eredis, gs-ов и т.п.)
-		% генерация (наличие, диапазон, помещение в очередь, событие Redis)
-		% частота генерации случайных чисел
+		test_config(),          % проверка наличия конфигурации
+		test_config_keys(),     % наличие всех параметров
+        test_config_content(),  % типы параметров
+		test_rg(),              % генерация (наличие, диапазон, помещение в очередь, событие Redis)
+		test_app_start()        % старт приложения (старт, стоп)
 	].
 
 %---------------------------------------------------------------------
 % Тест файла конфигурации (есть ли и читается ли)
 %---------------------------------------------------------------------	
-test_config() ->
+test_config() ->    
 	[
 		% есть конфиг?
-		?_assertEqual(true, filelib:is_file(?CONF)),
+		?_assertEqual(true, filelib:is_file(?FCONF)),
 		% открывается как список термов?
-		?_assertMatch({ok,_}, file:consult(?CONF))
+		?_assertMatch({ok,_}, file:consult(?FCONF))
 	]. 
 %---------------------------------------------------------------------
 % Тест содержимого файла конфигурации
 %---------------------------------------------------------------------
 test_config_keys() ->
-	{ok, [Args]} = file:consult(?CONF),
+	{ok, [Args]} = file:consult(?FCONF),
 	KeysInConfig = proplists:get_keys(Args),
 	KeysShouldBe =  ['RedisDB','RedisHost','RedisPort','QueueKey', 'ResultSetKey','N'],
 	[?_assertEqual(KeysInConfig, KeysShouldBe)].
 
 test_config_content() ->
-    {ok, [Args]} = file:consult(?CONF),
-    RedisHost    = proplists:get_value('RedisHost'   , Args, "127.0.0.1"),
-    RedisPort    = proplists:get_value('RedisPort'   , Args, 6379       ),
-    RedisDB      = proplists:get_value('RedisDB'     , Args, 0          ),% 0..15
-    QueueKey     = proplists:get_value('QueueKey'    , Args, "randoms"  ),
-    ResultSetKey = proplists:get_value('ResultSetKey', Args, "primes"   ),
-	N			 = proplists:get_value('N'           , Args, 1000000000 ),
+    Pars = get_params(),
     [
-        ?_assertMatch({ok, _}, inet:parse_ipv4_address(RedisHost)),
-        ?_assert(is_integer(RedisPort) andalso RedisPort >= 0 andalso RedisPort =< 65535),
-        ?_assert(is_integer(RedisDB) andalso RedisDB >=0 andalso RedisDB =< 15),
-        ?_assert(is_list(QueueKey)),
-        ?_assert(is_list(ResultSetKey)),
-        ?_assert(is_integer(N) andalso N >= 2)
+        ?_assertMatch({ok, _}, inet:parse_ipv4_address(Pars#args.rds_host)),
+        ?_assert(is_integer(Pars#args.rds_port) andalso 
+                            Pars#args.rds_port >= 0 andalso 
+                            Pars#args.rds_port =< 65535),
+        ?_assert(is_integer(Pars#args.rds_db) andalso 
+                            Pars#args.rds_db >=0 andalso
+                            Pars#args.rds_db =< 15),
+        ?_assert(is_list(Pars#args.rds_q)),
+        ?_assert(is_list(Pars#args.rds_s)),
+        ?_assert(is_integer(Pars#args.num) andalso 
+                            Pars#args.num >= 2)
     ].
+
+test_rg() ->
+    BasicArgs = add_redis_pids(get_params()),
+    ArgsRG = prepare_record_rg(BasicArgs),
+    %ArgsPF = prepare_record_pf(BasicArgs),
+    {ok, _RG} = random_generator:start_link(ArgsRG).
 
 test_app_start() ->
-    {ok, [Args]} = file:consult(?CONF),
-    RedisHost    = proplists:get_value('RedisHost'   , Args, "127.0.0.1"),
-    RedisPort    = proplists:get_value('RedisPort'   , Args, 6379       ),
-    RedisDB      = proplists:get_value('RedisDB'     , Args, 0          ),% 0..15
-    QueueKey     = proplists:get_value('QueueKey'    , Args, "randoms"  ),
-    ResultSetKey = proplists:get_value('ResultSetKey', Args, "primes"   ),
-	N			 = proplists:get_value('N'           , Args, 1000000000 ),
     [
-        ?_assertMatch({ok, _}, eredis:start_link(RedisHost, RedisPort, RedisDB)),
-        ?_assertMatch({ok, _}, eredis_sub:start_link()),
-        ?_assertMatch({ok, _}, eredis_smart_sub:start_link(EredisSubClient)),
-        ?_assertEqual(ok, application:start(primes))
+        ?_assertEqual(ok, application:start(primes)),
+        ?_assertEqual(ok, application:stop(primes))
     ].
 
-prepare() ->
-    {ok, [Args]} = file:consult(?CONF),
-    RedisHost    = proplists:get_value('RedisHost'   , Args, "127.0.0.1"),
-    RedisPort    = proplists:get_value('RedisPort'   , Args, 6379       ),
-    RedisDB      = proplists:get_value('RedisDB'     , Args, 0          ),% 0..15
-    QueueKey     = proplists:get_value('QueueKey'    , Args, "randoms"  ),
-    ResultSetKey = proplists:get_value('ResultSetKey', Args, "primes"   ),
-	N			 = proplists:get_value('N'           , Args, 1000000000 ),
-    {ok, Eredis} = eredis:start_link(RedisHost, RedisPort, RedisDB),
-    % получить PID процесса-контроллера подписки на события eredis
-    {ok, EredisSubClient} = eredis_sub:start_link(),
-    {ok, SubClient} = eredis_smart_sub:start_link(EredisSubClient),
-    RG = #st_rg{
-        number = N,
-        queue  = list_to_binary(QueueKey),
-        redis  = Eredis
-    },
-    PF = #st_pf{     
-        queue     = list_to_binary(QueueKey),     % для подписки на события
-        set       = list_to_binary(ResultSetKey),
-        redis     = Eredis,
-        redis_sub = SubClient
-    },
-    {Args, RG, PF}.
-finish(_) ->
-    no_op.
-
-%test_config_contents_start() -> 
-%	['RedisDB','RedisHost','RedisPort','QueueKey', 'ResultSetKey','N'].
-%test_config_contents_stop(_) -> no_op.
-%
-%test_config_contents() ->
+%test_rg() ->
 %	{"Тест содержимого конфига",
 %		{setup,
-%		fun prepare/0,
-%		fun finish/1,
+%		fun test_rg_start/0,
+%		fun test_rg_stop/1,
 %		fun (ParamList) ->
 %			[
 %				{
@@ -113,4 +78,41 @@ finish(_) ->
 %				}
 %			]
 %		end}
-%	}.
+%    }.
+%%-------------------------------------------------------------------------
+%% Функции подготовки структур данных
+%%-------------------------------------------------------------------------
+
+get_params() -> 
+    {ok, [Args]} = file:consult(?FCONF),
+    Pars = #args{
+                    rds_host = proplists:get_value('RedisHost'   , Args, "127.0.0.1"),
+                    rds_port = proplists:get_value('RedisPort'   , Args, 6379       ),
+                    rds_db   = proplists:get_value('RedisDB'     , Args, 0          ),
+                    rds_q    = proplists:get_value('QueueKey'    , Args, "randoms"  ),
+                    rds_s    = proplists:get_value('ResultSetKey', Args, "primes"   ),
+	                num		 = proplists:get_value('N'           , Args, 1000000000 )
+               }.
+
+add_redis_pids(#args{} = Pars) ->
+    application:load(eredis),
+    {ok, Eredis} = eredis:start_link(Pars#args.rds_host,
+                                     Pars#args.rds_port, 
+                                     Pars#args.rds_db),    
+    {ok, EredisSubClient} = eredis_sub:start_link(),
+    {ok, SubClient} = eredis_smart_sub:start_link(EredisSubClient),
+    NewPars = Pars#args{rds = Eredis, rds_sub = SubClient}.
+
+prepare_record_rg(#args{} = Pars) ->
+    RG = #st_rg{
+                number = Pars#args.num,
+                queue  = list_to_binary(Pars#args.rds_q),
+                redis  = Pars#args.rds
+               }.
+prepare_record_pf(#args{} = Pars) ->
+    PF = #st_pf{     
+                queue     = list_to_binary(Pars#args.rds_q), 
+                set       = list_to_binary(Pars#args.rds_s),
+                redis     = Pars#args.rds,
+                redis_sub = Pars#args.rds_sub
+               }.

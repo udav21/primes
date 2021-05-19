@@ -7,7 +7,7 @@
 
 -behaviour(application).
 
--include("states.hrl").
+-include("include/states.hrl").
 
 -export([start/2, stop/1]).
 

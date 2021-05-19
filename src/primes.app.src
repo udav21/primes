@@ -10,7 +10,7 @@
 				stdlib				
 			]
 		},
-		{env, [{configuration, "config/primes.config"}]},
+		{env, [{configuration, "primes.config"}]},
 		{modules, [primes_sup, primes_filter, random_generator]},
 		{licenses, ["Free"]},
 		{links, []}
