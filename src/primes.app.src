@@ -2,7 +2,7 @@
 	[
 		{description, "Randoms generation and primes filtering"},
 		{vsn, "0.1.0"},
-		{registered, [primes_filter, random_generator]},
+		%{registered, [primes_filter, random_generator]},
 		{mod, {primes_app, []}},
 		{applications,
 			[
@@ -11,7 +11,7 @@
 			]
 		},
 		{env, [{configuration, "primes.config"}]},
-		{modules, [primes_sup, primes_filter, random_generator]},
+		%{modules, [primes_sup, primes_filter, random_generator]},
 		{licenses, ["Free"]},
 		{links, []}
 	]

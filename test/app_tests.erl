@@ -1,4 +1,4 @@
--module(primes_tests).
+-module(app_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -11,11 +11,11 @@
 %% ===================================================================
 all_test_() ->
 	[
-		test_config(),          % проверка наличия конфигурации
-		test_config_keys(),     % наличие всех параметров
-        test_config_content(),  % типы параметров
-		test_rg(),              % генерация (наличие, диапазон, помещение в очередь, событие Redis)
-		test_app_start()        % старт приложения (старт, стоп)
+         test_config(),          % проверка наличия конфигурации
+         test_config_keys(),     % наличие всех параметров
+         test_config_content(),   % типы параметров
+		 test_rg(),              % генерация (наличие, диапазон, помещение в очередь, событие Redis)
+		 test_app_start()        % старт приложения (старт, стоп)
 	].
 
 %---------------------------------------------------------------------
@@ -23,10 +23,12 @@ all_test_() ->
 %---------------------------------------------------------------------	
 test_config() ->    
 	[
-		% есть конфиг?
-		?_assertEqual(true, filelib:is_file(?FCONF)),
-		% открывается как список термов?
-		?_assertMatch({ok,_}, file:consult(?FCONF))
+		{"Is there a config file?",
+		    ?_assertEqual(true, filelib:is_file(?FCONF))
+        },
+		{"Can the terms list be opened?",
+		    ?_assertMatch({ok,_}, file:consult(?FCONF))
+        }
 	]. 
 %---------------------------------------------------------------------
 % Тест содержимого файла конфигурации
@@ -35,23 +37,39 @@ test_config_keys() ->
 	{ok, [Args]} = file:consult(?FCONF),
 	KeysInConfig = proplists:get_keys(Args),
 	KeysShouldBe =  ['RedisDB','RedisHost','RedisPort','QueueKey', 'ResultSetKey','N'],
-	[?_assertEqual(KeysInConfig, KeysShouldBe)].
+	[
+        {"Is the list of keys full and correct?",
+            ?_assertEqual(KeysInConfig, KeysShouldBe)
+        }
+    ].
 
 test_config_content() ->
-    Pars = get_params(),
-    [
-        ?_assertMatch({ok, _}, inet:parse_ipv4_address(Pars#args.rds_host)),
-        ?_assert(is_integer(Pars#args.rds_port) andalso 
-                            Pars#args.rds_port >= 0 andalso 
-                            Pars#args.rds_port =< 65535),
-        ?_assert(is_integer(Pars#args.rds_db) andalso 
-                            Pars#args.rds_db >=0 andalso
-                            Pars#args.rds_db =< 15),
-        ?_assert(is_list(Pars#args.rds_q)),
-        ?_assert(is_list(Pars#args.rds_s)),
-        ?_assert(is_integer(Pars#args.num) andalso 
-                            Pars#args.num >= 2)
-    ].
+    {"Testing contents of the parameters",
+        {setup,
+            fun get_params/0,
+            fun (Pars) ->
+                [
+                    {"% IPv4 ?",
+                     ?_assertMatch({ok, _}, inet:parse_ipv4_address(Pars#args.rds_host))},
+                    {"% Port ?",
+                     ?_assert(is_integer(Pars#args.rds_port) andalso 
+                                         Pars#args.rds_port >= 0 andalso 
+                                         Pars#args.rds_port =< 65535)},
+                    {"% Database number ?",
+                     ?_assert(is_integer(Pars#args.rds_db) andalso 
+                                         Pars#args.rds_db >=0 andalso
+                                         Pars#args.rds_db =< 15)},
+                    {"% Queue name ?",
+                     ?_assert(is_list(Pars#args.rds_q))},
+                    {"% Set name ?",
+                     ?_assert(is_list(Pars#args.rds_s))},
+                    {"% Number ?",
+                     ?_assert(is_integer(Pars#args.num) andalso 
+                                         Pars#args.num >= 2)}
+                ]
+            end
+        }
+    }.
 
 test_rg() ->
     BasicArgs = add_redis_pids(get_params()),
@@ -86,6 +104,8 @@ get_params() ->
 
 add_redis_pids(#args{} = Pars) ->
     application:load(eredis),
+    application:load(eredis_sub),
+    application:load(eredis_smart_sub),
     {ok, Eredis} = eredis:start_link(Pars#args.rds_host,
                                      Pars#args.rds_port, 
                                      Pars#args.rds_db),    
@@ -106,21 +126,3 @@ prepare_record_pf(#args{} = Pars) ->
             redis     = Pars#args.rds,
             redis_sub = Pars#args.rds_sub
           }.
-
-%% ------------------------------------------------------------------------
-%% Шаблон тестов
-%% ------------------------------------------------------------------------
-%test_some() ->
-%	{"Тест чего-то",
-%		{setup,
-%		fun start/0,
-%		fun stop/1,
-%		fun (Set) ->
-%			[
-%				{
-%					"% test case",
-%					?_assert( , )
-%				}
-%			]
-%		end}
-%    }.

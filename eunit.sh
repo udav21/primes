@@ -1,5 +1,5 @@
 #!/bin/bash
 cd test
-erlc primes_tests.erl
-erl -noshell -eval "eunit:test(primes_tests, [verbose])" -s init stop
+erlc app_tests.erl
 cd ..
+erl -noshell -pa test -eval "eunit:test(app_tests, [verbose])" -s init stop

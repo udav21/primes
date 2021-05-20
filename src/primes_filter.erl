@@ -35,6 +35,7 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+% сообщения получать в handle_info по шаблону {message, <<"take_number">>}
 handle_info({message, <<"take_number">>}, State) ->
     % забрать из очереди число
 	{ok, Bin} = eredis:q(State#st_pf.redis, ["RPOP", State#st_pf.queue]),
