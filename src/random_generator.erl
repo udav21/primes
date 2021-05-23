@@ -22,7 +22,7 @@ start_link(Args) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
 init(State) ->
-    % запуск генератора "тиков", PID для kill в terminate()
+    % запуск генератора "тиков"
     Ticker =  spawn( fun() -> ticker(?SERVER, erlang:monotonic_time()) end),
     NewState = State#st_rg{ticker = Ticker},
     {ok, NewState}.
@@ -64,6 +64,7 @@ code_change(_OldVsn, State, _Extra) ->
 % с коррекцией времени задержки, и посылает сообщение процессу-обработчику.
 % @end
 % -------------------------------------------------------------------------
+
 -spec ticker(Sender, Time1) -> no_return() when
     Sender :: pid(), Time1 :: integer().
 ticker(Sender, Time1) ->
@@ -73,6 +74,16 @@ ticker(Sender, Time1) ->
 	    	Int < ?INTERVAL ->
 	    		ticker(Sender, Time1);
 	    	true ->
+                %Ввод проверки PID позволяет избежать ошибка при завершении приложения
+                %но плохо сказывается на точности интервала генерации
+                %if 
+                %    is_pid(Sender) ->
+                %        Sender ! tick;
+                %    true -> ok
+                %end,
+                % 
+                % Запуск генератора без проверки PID вызывает ошибку при остановке приложения
+                % но имеет самое точное время
                 Sender ! tick,
                 ticker(Sender, Time2)
 	    end.
