@@ -17,6 +17,7 @@
          terminate/2, 
          code_change/3]).
 
+
 start_link(Args) -> 
     gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
@@ -48,7 +49,6 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
-    exit(_State#st_rg.ticker, kill),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -67,12 +67,12 @@ code_change(_OldVsn, State, _Extra) ->
 -spec ticker(Sender, Time1) -> no_return() when
     Sender :: pid(), Time1 :: integer().
 ticker(Sender, Time1) ->
-	Time2 = erlang:monotonic_time(),
-	Int = erlang:convert_time_unit(Time2 -Time1, native, micro_seconds),
-	if
-		Int < ?INTERVAL ->
-			ticker(Sender, Time1);
-		true ->
-			Sender ! tick,
-			ticker(Sender, Time2)
-	end.
+        Time2 = erlang:monotonic_time(),
+	    Int = erlang:convert_time_unit(Time2 -Time1, native, micro_seconds),
+	    if
+	    	Int < ?INTERVAL ->
+	    		ticker(Sender, Time1);
+	    	true ->
+                Sender ! tick,
+                ticker(Sender, Time2)
+	    end.

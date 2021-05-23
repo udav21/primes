@@ -7,3 +7,4 @@ install rebar3, then git clone this repo, go to primes dir.
 rebar3 get-deps
 rebar3 compile
 rebar3 shell
+applicatio:start(primes)

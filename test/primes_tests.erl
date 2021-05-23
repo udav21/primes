@@ -1,26 +1,27 @@
 -module(primes_tests).
 
--include_lib("eunit/include/eunit.hrl").
-
--include("../include/states.hrl").
+-include("include/states.hrl").
 
 -define(FCONF, "primes.config").
 
-%% ===================================================================
+-ifdef(EUNIT).
+-include_lib("eunit/include/eunit.hrl").
+
+
+%% ========================================================================
 %%				TESTS
-%% ===================================================================
+%% ========================================================================
 all_test_() ->
 	[
-         test_config(),          % проверка наличия конфигурации
-         test_config_keys(),     % наличие всех параметров
-         test_config_content(),   % типы параметров
-		 test_rg(),              % генерация (наличие, диапазон, помещение в очередь, событие Redis)
-		 test_app_start()        % старт приложения (старт, стоп)
+        test_config(),           % проверка наличия конфигурации
+        test_config_content(),   % типы параметров
+        test_rg(),               % темп генерации случайных чисел
+        test_pf()                % работа алгоритма фильтрации простых чисел
 	].
 
-%---------------------------------------------------------------------
+%--------------------------------------------------------------------------
 % Тест файла конфигурации (есть ли и читается ли)
-%---------------------------------------------------------------------	
+%--------------------------------------------------------------------------	
 test_config() ->    
 	[
 		{"Is there a config file?",
@@ -30,18 +31,6 @@ test_config() ->
 		    ?_assertMatch({ok,_}, file:consult(?FCONF))
         }
 	]. 
-%---------------------------------------------------------------------
-% Тест содержимого файла конфигурации
-%---------------------------------------------------------------------
-test_config_keys() ->
-	{ok, [Args]} = file:consult(?FCONF),
-	KeysInConfig = proplists:get_keys(Args),
-	KeysShouldBe =  ['RedisDB','RedisHost','RedisPort','QueueKey', 'ResultSetKey','N'],
-	[
-        {"Is the list of keys full and correct?",
-            ?_assertEqual(KeysInConfig, KeysShouldBe)
-        }
-    ].
 
 test_config_content() ->
     {"Testing contents of the parameters",
@@ -73,20 +62,44 @@ test_config_content() ->
 
 test_rg() ->
     BasicArgs = add_redis_pids(get_params()),
-    ArgsRG = prepare_record_rg(BasicArgs),
-    %ArgsPF = prepare_record_pf(BasicArgs),
-    case random_generator:start_link(ArgsRG) of
-        {ok, RG} -> RG;
-        _  -> whereis(random_generator)
-    end,
-    [?_assert(true)].
-
-test_app_start() ->
-    [
-        ?_assertEqual(ok, application:start(primes)),
-        ?_assertEqual(ok, application:stop(primes))
+    StateRG = prepare_record_rg(BasicArgs),
+    StatePF = prepare_record_pf(BasicArgs),
+    % подписаться на сообщения очереди "в параллель" с запущенным генератором
+    gen_server:cast(StatePF#st_pf.redis_sub, {subscribe, [StatePF#st_pf.queue], self()}),
+    random_generator:start_link(StateRG),
+    Time1 = erlang:monotonic_time(),
+    count(3000), % отсчитать 3000 "тиков"
+    Time2 = erlang:monotonic_time(),
+    Time = erlang:convert_time_unit(Time2 -Time1, native, micro_seconds),
+    % отписаться от сообщений очереди
+    gen_server:cast(StatePF#st_pf.redis_sub, {unsubscribe, [StatePF#st_pf.queue], self()}),
+    % отсчитанные 3000 "тиков" поделить на затраченное время
+    Rate = 3000*1000000/Time, % на интервале в 1 секунду
+    [ 
+        {"Generation rate 3000 tps",
+         ?_assert((Rate > 2910) and (Rate < 3090))} % погрешность +- 3%
+         % относительная погрешность падает с ростом длительности интервала генерации
+         % дело в том, что генератор даёт абсолютную погрешность приблизительно в 
+         % 10 - 50 "тиков" в секунду в зависимости от "железа" и операционной системы.
     ].
 
+
+test_pf() ->
+    [
+        {"Strong pseudoprime 9746347772161",
+         ?_assertNot(primes_filter:is_prime(9746347772161))},       % одно из Кармайкловых чисел
+        {"Strong pseudoprime 443372888629441",
+         ?_assertNot(primes_filter:is_prime(443372888629441))},     % сильное псевдопростое Фибоначчи
+        {"Strong pseudoprime 3825123056546413051",
+         ?_assertNot(primes_filter:is_prime(3825123056546413051))}, % сильное псевдопростое по 9-ти основания (первым 9-ти простым)
+        {"Prime 18014398241046527",
+         ?_assert(primes_filter:is_prime(18014398241046527))},       % простое
+        {"Prime 4398042316799",
+         ?_assert(primes_filter:is_prime(4398042316799))}            % простое
+    ].
+
+
+%%=========================================================================
 %%-------------------------------------------------------------------------
 %% Функции подготовки структур данных
 %%-------------------------------------------------------------------------
@@ -126,3 +139,12 @@ prepare_record_pf(#args{} = Pars) ->
             redis     = Pars#args.rds,
             redis_sub = Pars#args.rds_sub
           }.
+
+count(0) -> ok;
+count(Ticks) ->
+       receive
+           {message, <<"take_number">>} -> count(Ticks - 1)
+       after 5000 ->
+           timeout
+       end.
+-endif.

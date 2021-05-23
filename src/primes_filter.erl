@@ -15,6 +15,10 @@
         terminate/2, 
         code_change/3]).
 
+-ifdef(EUNIT).
+-export([is_prime/1]).
+-endif.
+
 -define(ROUNDS, 20).	% Количество циклов проверки в тесте
 
 start_link(Args) -> 
